@@ -9,7 +9,7 @@
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 	<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700;800&display=swap" rel="stylesheet">
-	<link rel="stylesheet" href="style.css">
+	<link rel="stylesheet" href="/style.css">
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js" defer></script>
 	<script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
@@ -52,4 +52,4 @@
 		const startSession = (email) => { const session = { email, token: `ezzzy-${Date.now()}-${Math.random().toString(36).slice(2)}`, wallet: { coins: 47, naira: 940 }, deviceBound: true }; sessionStorage.setItem('ezzzySession', JSON.stringify(session)); document.querySelector('.auth-panel').innerHTML = `<div class="lobby-screen"><span class="google-modal-icon">G</span><p class="auth-kicker">Signed in successfully</p><h2>Welcome to the lobby.</h2><p>${email}</p><div class="wallet-badge"><strong>47 Coins</strong><span>Wallet balance: ₦940</span></div><button class="primary-button lobby-button" type="button">Enter lobby <span class="button-arrow">&#8594;</span></button></div>`; };
 		document.querySelectorAll('.account-option').forEach((option) => option.addEventListener('click', () => { accountModal.hidden = true; document.body.classList.remove('modal-open'); startSession(option.dataset.email); }));
 	</script>
-	<script src="client.js" defer></script>
+	<script src="/client.js" defer></script>
