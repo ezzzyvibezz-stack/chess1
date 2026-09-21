@@ -1,0 +1,53 @@
+/* Mobile-first layout and responsive overrides for the Ezzzy Chess auth screen. */
+@import url('chess.css');
+:root {
+  --surface: #070a12;
+  --panel: #0d111d;
+  --panel-soft: #171126;
+  --text: #f8edff;
+  --muted: #b9a7c7;
+  --accent: #efc7ff;
+  --border: #49305b;
+}
+
+html { min-width: 320px; background: var(--surface); }
+body { min-height: 100svh; overflow-x: hidden; background: var(--surface); color: var(--text); }
+.page-shell { display: flex; flex-direction: column; min-height: 100svh; }
+.brand-panel, .auth-panel { width: 100%; min-width: 0; }
+.brand-panel { min-height: 100svh; padding: clamp(24px, 7vw, 42px) clamp(20px, 7vw, 94px) 28px; }
+.auth-panel { min-height: auto; padding: 56px clamp(20px, 7vw, 94px) 72px; background: #070a12 !important; }
+.auth-content { width: min(100%, 430px); }
+.board-wrap { width: min(78vw, 360px); max-width: 100%; }
+.auth-heading h2 { font-size: clamp(2rem, 9vw, 2.9rem); }
+.google-button { display: flex; min-height: 51px; width: 100%; align-items: center; justify-content: center; gap: 10px; overflow: hidden; cursor: pointer; border: 1px solid #8c6aa3; border-radius: 5px; color: #fff; background: rgba(255,255,255,.08); box-shadow: 0 4px 14px rgba(0,0,0,.18); font-size: 13px; font-weight: 700; transition: border-color .2s, box-shadow .2s, transform .2s; }
+.google-button:hover { border-color: #efc7ff; box-shadow: 0 0 0 3px rgba(239,199,255,.15), 0 8px 20px rgba(0,0,0,.2); transform: translateY(-1px); }
+.google-button:focus-visible { outline: 3px solid rgba(239,199,255,.55); outline-offset: 3px; }
+.google-button .google-icon { display: inline-grid; width: 22px; height: 22px; place-items: center; color: transparent; background: conic-gradient(from -45deg, #4285f4 0 25%, #34a853 0 50%, #fbbc05 0 75%, #ea4335 0); -webkit-background-clip: text; background-clip: text; font-family: Arial, sans-serif; font-size: 22px; font-weight: 800; line-height: 1; }
+.google-button > div { max-width: 100% !important; }
+.field input { border: 1px solid #8c6aa3 !important; color: #fff8ff !important; background: #30203f !important; box-shadow: inset 0 0 0 1px rgba(239,199,255,.08); }
+.field input::placeholder { color: #cdb9d8 !important; }
+.field input:focus { border-color: #efc7ff !important; background: #3b2750 !important; box-shadow: 0 0 0 3px rgba(239,199,255,.2), 0 8px 24px rgba(0,0,0,.18) !important; }
+.field input:-webkit-autofill { -webkit-text-fill-color: #fff8ff; box-shadow: 0 0 0 1000px #30203f inset; }
+.field-error { display: block; min-height: 16px; margin-top: 6px; color: #ff9eaf; font-size: .72rem; }
+.account-dialog { max-height: calc(100svh - 40px); overflow-y: auto; }
+
+@media (min-width: 481px) {
+  .brand-panel { min-height: 680px; }
+  .auth-panel { padding-inline: 8vw; }
+  .board-wrap { width: min(62vw, 390px); }
+}
+
+@media (min-width: 769px) {
+  .page-shell { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(420px, .92fr); }
+  .brand-panel, .auth-panel { min-height: 100svh; }
+  .auth-panel { padding: 55px 8vw; }
+}
+
+@media (orientation: landscape) and (max-height: 600px) {
+  .brand-panel { min-height: 680px; }
+  .auth-panel { padding-block: 40px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
+}
