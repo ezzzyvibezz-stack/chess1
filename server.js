@@ -2,16 +2,47 @@ require('dotenv').config();
 
 const express = require('express');
 const path = require('path');
-const admin = require('firebase-admin');
 const cookieParser = require('cookie-parser');
-const { OAuth2Client } = require('google-auth-library');
-const { body, validationResult } = require('express-validator');
+
+let admin;
+let OAuth2Client;
+let body;
+let validationResult;
+
+try {
+  admin = require('firebase-admin');
+} catch (error) {
+  console.error('Firebase Admin is unavailable. Authentication routes will return 503.', error.message);
+}
+
+try {
+  ({ OAuth2Client } = require('google-auth-library'));
+} catch (error) {
+  console.error('Google Auth Library is unavailable. Google sign-in will return 503.', error.message);
+}
+
+try {
+  ({ body, validationResult } = require('express-validator'));
+} catch (error) {
+  console.error('Express Validator is unavailable. Authentication validation is disabled until dependencies are installed.', error.message);
+  body = () => {
+    const middleware = (req, res, next) => next();
+    middleware.isString = () => middleware;
+    middleware.isLength = () => middleware;
+    middleware.withMessage = () => middleware;
+    middleware.optional = () => middleware;
+    middleware.trim = () => middleware;
+    middleware.custom = () => middleware;
+    return middleware;
+  };
+  validationResult = () => ({ isEmpty: () => true, array: () => [] });
+}
 
 const app = express();
 const port = Number(process.env.PORT || 5000);
 const firebaseApiKey = process.env.FIREBASE_WEB_API_KEY;
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
-const googleVerifier = new OAuth2Client(googleClientId);
+const googleVerifier = OAuth2Client && googleClientId ? new OAuth2Client(googleClientId) : null;
 const allowedRegisterFields = new Set(['identity', 'password', 'name']);
 const allowedLoginFields = new Set(['identity', 'password']);
 
@@ -32,7 +63,7 @@ app.use((req, res, next) => {
   next();
 });
 
-if (!admin.apps.length) {
+if (admin && !admin.apps.length) {
   admin.initializeApp();
 }
 
@@ -69,6 +100,11 @@ function validateRequest(req, res, next) {
   next();
 }
 
+function requireAuthDependencies(req, res, next) {
+  if (!admin) return res.status(503).json({ error: 'Authentication service dependencies are unavailable. Run npm install and restart the server.', requestId: req.id });
+  next();
+}
+
 async function createSessionCookie(idToken, res) {
   const expiresIn = 1000 * 60 * 60 * 24 * 5;
   const sessionCookie = await admin.auth().createSessionCookie(idToken, { expiresIn });
@@ -86,7 +122,7 @@ async function firebasePasswordSignIn(identity, password) {
 }
 
 async function firebaseGoogleSignIn(credential) {
-  if (!firebaseApiKey || !googleClientId) throw new Error('Google/Firebase configuration is incomplete.');
+  if (!firebaseApiKey || !googleClientId || !googleVerifier) throw new Error('Google/Firebase configuration is incomplete.');
   const ticket = await googleVerifier.verifyIdToken({ idToken: credential, audience: googleClientId });
   const googlePayload = ticket.getPayload();
   if (!googlePayload || !googlePayload.email || googlePayload.email_verified === false) throw new Error('Google primary email is not verified.');
@@ -102,7 +138,7 @@ async function userForIdentity(identity) {
   return emailPattern.test(identity) ? admin.auth().getUserByEmail(identity) : admin.auth().getUserByPhoneNumber(identity);
 }
 
-app.post('/api/auth/register', rejectUnknownFields(allowedRegisterFields), [identityRule(), passwordRule, body('name').optional().isString().trim().isLength({ max: 80 })], validateRequest, async (req, res) => {
+app.post('/api/auth/register', requireAuthDependencies, rejectUnknownFields(allowedRegisterFields), [identityRule(), passwordRule, body('name').optional().isString().trim().isLength({ max: 80 })], validateRequest, async (req, res) => {
   try {
     const identity = normalizedIdentity(req.body.identity);
     const user = await admin.auth().createUser({ ...identity, password: req.body.password, displayName: req.body.name || undefined });
@@ -116,7 +152,7 @@ app.post('/api/auth/register', rejectUnknownFields(allowedRegisterFields), [iden
   }
 });
 
-app.post('/api/auth/login', rejectUnknownFields(allowedLoginFields), [identityRule(), passwordRule], validateRequest, async (req, res) => {
+app.post('/api/auth/login', requireAuthDependencies, rejectUnknownFields(allowedLoginFields), [identityRule(), passwordRule], validateRequest, async (req, res) => {
   try {
     const signedIn = await firebasePasswordSignIn(req.body.identity, req.body.password);
     const user = await userForIdentity(req.body.identity);
@@ -128,7 +164,7 @@ app.post('/api/auth/login', rejectUnknownFields(allowedLoginFields), [identityRu
   }
 });
 
-app.post('/api/auth/google', rejectUnknownFields(new Set(['credential'])), [body('credential').isString().isLength({ min: 20, max: 10000 })], validateRequest, async (req, res) => {
+app.post('/api/auth/google', requireAuthDependencies, rejectUnknownFields(new Set(['credential'])), [body('credential').isString().isLength({ min: 20, max: 10000 })], validateRequest, async (req, res) => {
   try {
     const { googlePayload, firebasePayload } = await firebaseGoogleSignIn(req.body.credential);
     const user = await admin.auth().getUserByEmail(googlePayload.email).catch(async (error) => {
