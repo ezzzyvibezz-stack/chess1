@@ -15,6 +15,23 @@ const googleVerifier = new OAuth2Client(googleClientId);
 const allowedRegisterFields = new Set(['identity', 'password', 'name']);
 const allowedLoginFields = new Set(['identity', 'password']);
 
+function logRequestError(req, error, context = 'Unhandled request error') {
+  console.error(`[${req.id || 'no-request-id'}] ${context}`, {
+    method: req.method,
+    path: req.originalUrl,
+    message: error?.message || String(error),
+    code: error?.code,
+    stack: error?.stack
+  });
+}
+
+app.use((req, res, next) => {
+  req.id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  res.setHeader('X-Request-Id', req.id);
+  console.log(`[${req.id}] ${req.method} ${req.originalUrl}`);
+  next();
+});
+
 if (!admin.apps.length) {
   admin.initializeApp();
 }
@@ -94,7 +111,9 @@ app.post('/api/auth/register', rejectUnknownFields(allowedRegisterFields), [iden
     await createSessionCookie(signedIn.idToken, res);
     res.status(201).json({ uid: user.uid, email: user.email || null, phoneNumber: user.phoneNumber || null, name: user.displayName || null });
   } catch (error) {
-    res.status(error.code === 'auth/email-already-exists' || error.code === 'auth/phone-number-already-exists' ? 409 : 400).json({ error: error.message });
+    logRequestError(req, error, 'Registration failed');
+    const duplicate = error.code === 'auth/email-already-exists' || error.code === 'auth/phone-number-already-exists';
+    res.status(duplicate ? 409 : 500).json({ error: duplicate ? error.message : 'Registration failed. Check the server logs for details.', requestId: req.id });
   }
 });
 
@@ -105,6 +124,7 @@ app.post('/api/auth/login', rejectUnknownFields(allowedLoginFields), [identityRu
     await createSessionCookie(signedIn.idToken, res);
     res.json({ uid: user.uid, email: user.email || null, phoneNumber: user.phoneNumber || null, name: user.displayName || null });
   } catch (error) {
+    logRequestError(req, error, 'Login failed');
     res.status(401).json({ error: 'Invalid primary identity or password.' });
   }
 });
@@ -119,6 +139,7 @@ app.post('/api/auth/google', rejectUnknownFields(new Set(['credential'])), [body
     await createSessionCookie(firebasePayload.idToken, res);
     res.json({ uid: user.uid, email: user.email, name: user.displayName || googlePayload.name || null });
   } catch (error) {
+    logRequestError(req, error, 'Google authentication failed');
     res.status(401).json({ error: 'Google token verification failed.' });
   }
 });
@@ -191,6 +212,7 @@ app.post('/api/chat', async (req, res) => {
     if (!answer) throw new Error('The model returned an empty answer.');
     res.json({ answer });
   } catch (error) {
+    logRequestError(req, error, 'AI request failed');
     res.status(502).json({ error: error.message || 'AI service unavailable.' });
   }
 });
@@ -264,6 +286,7 @@ async function sendWhatsAppMessage(req, res) {
     } catch (error) {
       outbound.status = 'failed';
       outbound.apiError = { error: String(error.message || error) };
+      logRequestError(req, error, 'Twilio WhatsApp request failed');
       return res.status(502).json({ ok: false, error: 'Twilio WhatsApp send failed.' });
     }
   }
@@ -294,6 +317,7 @@ async function sendWhatsAppMessage(req, res) {
     } catch (error) {
       outbound.status = 'failed';
       outbound.apiError = { error: String(error.message || error) };
+      logRequestError(req, error, 'UltraMsg WhatsApp request failed');
       return res.status(502).json({ ok: false, error: 'UltraMsg WhatsApp send failed.' });
     }
   }
@@ -349,4 +373,16 @@ app.post('/api/whatsapp-webhook', (req, res) => {
   res.status(200).json({ ok: true, received: Boolean(messageText) });
 });
 
-app.listen(port, () => console.log(`Ezzzy Chess server listening on http://localhost:${port}`));
+app.use((error, req, res, next) => {
+  logRequestError(req, error, 'Global error handler');
+  if (res.headersSent) return next(error);
+  const statusCode = Number.isInteger(error.statusCode) && error.statusCode >= 400 && error.statusCode < 600 ? error.statusCode : 500;
+  const message = statusCode === 500 ? 'Internal server error. Check the server logs for the request stack trace.' : error.message;
+  res.status(statusCode).json({ error: message, requestId: req.id });
+});
+
+const server = app.listen(port, () => console.log(`Ezzzy Chess server listening on http://localhost:${port}`));
+server.on('error', (error) => {
+  console.error('Failed to start Ezzzy Chess server', { message: error.message, code: error.code, stack: error.stack });
+  process.exitCode = 1;
+});

@@ -310,6 +310,19 @@ const setChatOpenState = (open) => {
   minimizeButton.setAttribute('aria-label', open ? 'Minimize assistant' : 'Open assistant');
 };
 const apiBaseUrl = window.location.protocol === 'file:' ? 'http://localhost:3000' : '';
+const readApiResponse = async (response, context) => {
+  const rawBody = await response.text();
+  let data = {};
+  try {
+    data = rawBody ? JSON.parse(rawBody) : {};
+  } catch (error) {
+    console.error(`${context}: server returned non-JSON response`, { status: response.status, statusText: response.statusText, body: rawBody });
+  }
+  if (!response.ok) {
+    console.error(`${context}: API request failed`, { status: response.status, statusText: response.statusText, requestId: response.headers.get('x-request-id'), body: data || rawBody });
+  }
+  return data;
+};
 const askAi = async (question) => {
   try {
     const response = await fetch(`${apiBaseUrl}/api/chat`, {
@@ -317,11 +330,12 @@ const askAi = async (question) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: question, systemPrompt: aiSystemPrompt })
     });
-    const data = await response.json().catch(() => ({}));
+    const data = await readApiResponse(response, 'Echat');
     if (response.ok && data.answer) return data.answer;
-    return buildAiReply(question);
+    return data.error || 'Echat is temporarily unavailable. Please try again in a moment.';
   } catch (error) {
-    return buildAiReply(question);
+    console.error('Echat request failed', error);
+    return 'Echat is temporarily unavailable. Please try again in a moment.';
   }
 };
 const checkSupportBridgeReady = async () => {
@@ -373,7 +387,7 @@ const sendSupportMessage = async (message) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    const data = await response.json().catch(() => ({}));
+    const data = await readApiResponse(response, 'WhatsApp support');
 
     if (!response.ok || data.ok === false) {
       supportThread.push({ type: 'notice', text: data.error || 'Customer Care could not send this message. Please try again in a moment.' });

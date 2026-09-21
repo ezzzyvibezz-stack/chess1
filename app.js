@@ -20,6 +20,20 @@
   let isSignup = false;
   let googleIdToken = '';
 
+  const readApiResponse = async (response, context) => {
+    const rawBody = await response.text();
+    let payload = {};
+    try {
+      payload = rawBody ? JSON.parse(rawBody) : {};
+    } catch (error) {
+      console.error(`${context}: server returned non-JSON response`, { status: response.status, statusText: response.statusText, body: rawBody });
+    }
+    if (!response.ok) {
+      console.error(`${context}: API request failed`, { status: response.status, statusText: response.statusText, requestId: response.headers.get('x-request-id'), body: payload || rawBody });
+    }
+    return { payload, rawBody };
+  };
+
   // These patterns intentionally allow only one primary email or phone identity.
   const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
   const phonePattern = /^(?:\+234\d{10}|0\d{10})$/;
@@ -83,11 +97,12 @@
       try {
         const endpoint = isSignup ? '/api/auth/register' : '/api/auth/login';
         const result = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ identity: identityInput.value.trim(), password: document.querySelector('#password').value, name: document.querySelector('#name')?.value.trim() || undefined }) });
-        const payload = await result.json();
+        const { payload } = await readApiResponse(result, 'Authentication');
         if (!result.ok) throw new Error(payload.error || 'Authentication failed.');
         startSession(payload.email, { name: payload.name });
       } catch (error) {
-        status.textContent = error.message;
+        console.error('Authentication request failed', error);
+        status.textContent = error.message || 'Authentication is temporarily unavailable. Please try again.';
       }
   });
 
@@ -96,8 +111,9 @@
     googleIdToken = response.credential;
     try {
       const result = await fetch('/api/auth/google', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ credential: googleIdToken }) });
-        if (!result.ok) throw new Error('Google authentication was rejected by the server.');
-        const user = await result.json();
+        const { payload } = await readApiResponse(result, 'Google authentication');
+        if (!result.ok) throw new Error(payload.error || 'Google authentication was rejected by the server.');
+        const user = payload;
         startSession(user.email, { name: user.name });
     } catch (error) {
       status.textContent = 'Google sign-in could not be verified. Please try again.';
